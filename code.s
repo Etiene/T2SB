@@ -8,7 +8,21 @@ f0:
 /*   0:	55                   	push   %ebp
    1:	89 e5                	mov    %esp,%ebp
 */
-	mov $1, %eax
+	mov 8(%ebp), %ecx
+	mov 12(%ebp), %ecx
+	mov $5, %edx
+	mov $15, %ecx
+	mov $5, %ecx
+	add $4, 8(%ebp)
+	add $64, 8(%ebp)
+	add $5, %edx
+	add $127, %edx
+	add %edx, 8(%ebp)
+	mov %edx,  8(%ebp)
+
+	add %ecx,%edx
+	sub %ecx,%edx
+	imul %ecx,%edx
 
 	movl %ebp, %esp
 	popl %ebp
