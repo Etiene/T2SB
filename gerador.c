@@ -4,6 +4,13 @@
 
 #define TAM_COD 2000
 #define PRM_MAX 10
+#define MAX_FUNCS 33
+
+void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, int line);
+void cmd_atr(char v0, int i0, char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int line);
+void concat (unsigned char * code1, unsigned char * code2, int * idx, int n);
+void cmd_func(unsigned char ** func, int * funcIdx, unsigned char * code, int * idx);
+void cmd_end(unsigned char * code, int * idx);
 
 static void error (const char *msg, int line) {
 	fprintf(stderr, "erro %s na linha %d\n", msg, line);
@@ -13,14 +20,12 @@ static void error (const char *msg, int line) {
 
 void gera(FILE *f, void **code, funcp *entry){
 	int c;
-	int line = 1;
-	int idx = 0;
-	unsigned char top[] = {0x55, 0x89, 0xe5};
+	int line = 1, 
+		idx = 0, 
+		funcIdx = -1;
+	unsigned char * func[MAX_FUNCS];
 
 	(*code) = (unsigned char *) malloc (TAM_COD);
-
-
-	concat(*code,top,&idx,3);
 
 	while ((c = fgetc(f)) != EOF) {
 		switch (c) {
@@ -29,6 +34,7 @@ void gera(FILE *f, void **code, funcp *entry){
 		        if (fscanf(f, "unction%c", &c0) != 1) 
 		        	error("comando invalido", line);
 		        printf("function\n");
+		        cmd_func(func,&funcIdx,*code,&idx);
 		        break;
             }
 		    case 'e': {  /* end */
@@ -36,6 +42,7 @@ void gera(FILE *f, void **code, funcp *entry){
 		        if (fscanf(f, "nd%c", &c0) != 1) 
 		        	error("comando invalido", line);
 		        printf("end\n");
+		        cmd_end(*code,&idx);
 		        break;
 		    }
 		    case 'v': 
@@ -85,7 +92,7 @@ void gera(FILE *f, void **code, funcp *entry){
 }
 
 void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, int line){
-	unsigned char bottom[] = {0x89, 0xec, 0x5d, 0xc3};
+	
 	switch(v0){
 		case '$': {
 			if(!i0){
@@ -114,8 +121,9 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 			}
 			break;
 		}
+		//TODO quando o priemiro paramentro do ret não é constante
 	}
-	concat(code,bottom,idx,4);
+	
 }
 
 
@@ -175,3 +183,16 @@ void cmd_atr(char v0, int i0, char v1, int i1, char op, char v2, int i2, unsigne
 		//TODO - Var
 	}
 }
+
+void cmd_func(unsigned char ** func, int * funcIdx, unsigned char * code, int * idx){
+	unsigned char begin[] = {0x55, 0x89, 0xe5};
+	(*funcIdx)++;
+	func[*funcIdx] = &code[*idx];
+	concat(code,begin,idx,3);
+}
+
+void cmd_end(unsigned char * code, int * idx){
+	unsigned char end[] = {0x89, 0xec, 0x5d, 0xc3};
+	concat(code,end,idx,4);
+}
+
