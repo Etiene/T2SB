@@ -88,7 +88,7 @@ void gera(FILE *f, void **code, funcp *entry){
 	}
 
 
-
+	(*entry) = (funcp) func[funcIdx];
 }
 
 void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, int line){
