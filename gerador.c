@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "gerador.h"
 
 #define TAM_COD 2000
@@ -18,13 +17,10 @@ void gera(FILE *f, void **code, funcp *entry){
 	int idx = 0;
 	unsigned char top[] = {0x55, 0x89, 0xe5};
 
-	//eu acho q esse codigo aqui é o code q é pra vir da main
-	//mas ainda nao entendi isso direito e coloquei aqui por enquanto
-	//pra ter algo funcionando
-	unsigned char codigo[TAM_COD];
+	(*code) = (unsigned char *) malloc (TAM_COD);
 
 
-	concat(codigo,top,&idx,3);
+	concat(*code,top,&idx,3);
 
 	while ((c = fgetc(f)) != EOF) {
 		switch (c) {
@@ -63,7 +59,7 @@ void gera(FILE *f, void **code, funcp *entry){
 					if (fscanf(f, "%d %c %c%d", &i1, &op, &v2, &i2) != 4)
 						error("comando invalido", line);
 					printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
-					cmd_atr(v0,i0,v1,i1,op,v2,i2,codigo,&idx,line);
+					cmd_atr(v0,i0,v1,i1,op,v2,i2,*code,&idx,line);
 		        }
         		break;
 		    }
@@ -73,7 +69,7 @@ void gera(FILE *f, void **code, funcp *entry){
 				if (fscanf(f, "et? %c%d %c%d", &v0, &i0, &v1, &i1) != 4)
 					error("comando invalido", line);
 				printf("ret? %c%d %c%d\n", v0, i0, v1, i1);
-				cmd_ret(v0,i0,v1,i1,codigo,&idx,line);
+				cmd_ret(v0,i0,v1,i1,*code,&idx,line);
 				break;
     		}
 		    default: 
@@ -84,11 +80,7 @@ void gera(FILE *f, void **code, funcp *entry){
   		fscanf(f, " ");
 	}
 
-	//teste
-	{
-		funcp pFunc = (funcp) codigo;
-		printf("Resultado: %d\n",(*pFunc)(3,5,6));
-	}
+
 
 }
 
