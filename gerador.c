@@ -5,12 +5,15 @@
 #define TAM_COD 2000
 #define PRM_MAX 10
 #define MAX_FUNCS 33
+#define DEBUG 0
 
-void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, int line);
-void cmd_atr(char v0, int i0, char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int line);
 void concat (unsigned char * code1, unsigned char * code2, int * idx, int n);
+void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, int line);
+void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx);
 void cmd_func(unsigned char ** func, int * funcIdx, unsigned char * code, int * idx);
 void cmd_end(unsigned char * code, int * idx);
+void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code, int * idx);
+void cmd_atr(char v0, int i0, unsigned char *code, int * idx);
 
 static void error (const char *msg, int line) {
 	fprintf(stderr, "erro %s na linha %d\n", msg, line);
@@ -24,8 +27,8 @@ void gera(FILE *f, void **code, funcp *entry){
 		idx = 0, 
 		funcIdx = -1;
 	unsigned char * func[MAX_FUNCS];
-
-	(*code) = (unsigned char *) malloc (TAM_COD);
+    unsigned char *codigo = (unsigned char *) malloc (TAM_COD);
+    *code = codigo;
 
 	while ((c = fgetc(f)) != EOF) {
 		switch (c) {
@@ -33,16 +36,22 @@ void gera(FILE *f, void **code, funcp *entry){
 		        char c0;
 		        if (fscanf(f, "unction%c", &c0) != 1) 
 		        	error("comando invalido", line);
+			    #if (DEBUG)
+					printf("%d - %p:	",idx,&codigo[idx]);
+				#endif
 		        printf("function\n");
-		        cmd_func(func,&funcIdx,*code,&idx);
+		        cmd_func(func,&funcIdx,codigo,&idx);
 		        break;
             }
 		    case 'e': {  /* end */
             	char c0;
 		        if (fscanf(f, "nd%c", &c0) != 1) 
 		        	error("comando invalido", line);
+		        #if (DEBUG)
+					printf("%d - %p:		",idx, &codigo[idx]);
+				#endif
 		        printf("end\n");
-		        cmd_end(*code,&idx);
+		        cmd_end(codigo,&idx);
 		        break;
 		    }
 		    case 'v': 
@@ -58,16 +67,27 @@ void gera(FILE *f, void **code, funcp *entry){
 					char v1;
 					if (fscanf(f, "all %d %c%d", &fc, &v1, &i1) != 3) 
 						error("comando invalido", line);
+					#if (DEBUG)
+						printf("%d - %p:	",idx,&codigo[idx]);
+					#endif
 					printf("%c%d = call %d %c%d\n", v0, i0, fc, v1, i1);
+					cmd_call(fc,v1,i1,func,codigo,&idx);
 		        }
 		        else { /* operacao aritmetica */
 					int i1, i2;
 					char v1 = c0, v2, op;
 					if (fscanf(f, "%d %c %c%d", &i1, &op, &v2, &i2) != 4)
 						error("comando invalido", line);
+					#if (DEBUG)
+						printf("%d - %p:	",idx, &codigo[idx]);
+					#endif
 					printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
-					cmd_atr(v0,i0,v1,i1,op,v2,i2,*code,&idx,line);
+					cmd_op(v1,i1,op,v2,i2,codigo,&idx);
 		        }
+		         #if (DEBUG==2)
+					printf(">>>Atribuindo\n");
+				#endif
+		        cmd_atr(v0,i0,codigo,&idx);
         		break;
 		    }
 		    case 'r': {  /* ret */
@@ -75,8 +95,11 @@ void gera(FILE *f, void **code, funcp *entry){
 				char v0, v1;
 				if (fscanf(f, "et? %c%d %c%d", &v0, &i0, &v1, &i1) != 4)
 					error("comando invalido", line);
+				#if (DEBUG)
+					printf("%d - %p:	",idx, &codigo[idx]);
+				#endif
 				printf("ret? %c%d %c%d\n", v0, i0, v1, i1);
-				cmd_ret(v0,i0,v1,i1,*code,&idx,line);
+				cmd_ret(v0,i0,v1,i1,codigo,&idx,line);
 				break;
     		}
 		    default: 
@@ -98,10 +121,16 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 			if(!i0){
 				switch(v1){
 					case '$':{	//const
+						#if (DEBUG == 2)
+							printf(">>>>%d Antes do ret %p:	<<<<<\n", *idx, &code[*idx]);
+						#endif
 						code[*idx] = 0xb8;
 						(*idx)++;
 						*( (int *) &code[*idx] ) = i1;  
 						(*idx) += 4;
+						#if (DEBUG == 2)
+							printf(">>>>%d Depois do ret %p:	<<<<<\n", *idx,&code[*idx]);
+						#endif
 						break;						
 					}
 					case 'p':{ //parameter
@@ -114,14 +143,14 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 						break;
 					}
 					case 'v':{ // var
-						//TODO
+						//TODO local var
 						break;
 					}
 				}
 			}
 			break;
 		}
-		//TODO quando o priemiro paramentro do ret não é constante
+		//TODO quando o priemiro paramentro do ret não é constante , case v, case p
 	}
 	
 }
@@ -136,51 +165,63 @@ void concat (unsigned char * code1, unsigned char * code2, int * idx, int n){
 	}
 }
 
-void cmd_atr(char v0, int i0, char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int line){
-	if(v0=='p'){//parameter
-		//mov to p
-		unsigned char movtop[] = {0x89, 0x55, 0x08};
-		if(v1=='$'){
-			//mov $i1, %edx
-			code[*idx] = 0xba;
-			(*idx)++;
-			*( (int *) &code[*idx] ) = i1;  
-			(*idx) += 4;
-		}else if(v1=='p'){
-			//mov 8+4*i1(%ebp),%edx
-			unsigned char mov_edx[] = {0x8b, 0x55};
-			concat(code,mov_edx,idx,2);
-			code[*idx] = (unsigned char) i1*4 + 8;
-			(*idx)++;
-		}
-		if(v2=='$'){
-			//mov $i1, %ecx
-			code[*idx] = 0xb9;
-			(*idx)++;
-			*( (int *) &code[*idx] ) = i2;  
-			(*idx) += 4;
-		}else if(v2=='p'){
-			//mov 8+4*i1(%ebp),%ecx
-			unsigned char mov_ecx[] = {0x8b, 0x4d};
-			concat(code,mov_ecx,idx,2);
-			code[*idx] = (unsigned char) i2*4 + 8;
-			(*idx)++;
-		}
-		//make operations with %ecx and %edx
-		if(op=='+'){
-			unsigned char makeop[] = {0x01, 0xca};
-			concat(code,makeop,idx,2);
-		}else if(op=='-'){
-			unsigned char makeop[] = {0x29, 0xca};
-			concat(code,makeop,idx,2);
-		}else if(op=='*'){
-			unsigned char makeop[] = {0x0f, 0xaf, 0xd1};
-			concat(code,makeop,idx,3);
-		}
-		//mov edx to p
-		concat(code,movtop,idx,3);
-	}else{
-		//TODO - Var
+void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx){
+	
+	if(v1=='$'){
+		//mov $i1, %edx
+		code[*idx] = 0xb8;
+		(*idx)++;
+		*( (int *) &code[*idx] ) = i1;  
+		(*idx) += 4;
+	}else if(v1=='p'){
+		//mov 8+4*i1(%ebp),%edx
+		unsigned char mov_edx[] = {0x8b, 0x45};
+		concat(code,mov_edx,idx,2);
+		code[*idx] = (unsigned char) i1*4 + 8;
+		(*idx)++;
+	}else if(v1=='v'){
+		//TODO - MOV LOCAL VAR TO EDX
+	}
+
+	if(v2=='$'){
+		//mov $i1, %eax
+		code[*idx] = 0xba;
+		(*idx)++;
+		*( (int *) &code[*idx] ) = i2;  
+		(*idx) += 4;
+	}else if(v2=='p'){
+		//mov 8+4*i1(%ebp),%eax
+		unsigned char mov_ecx[] = {0x8b, 0x55};
+		concat(code,mov_ecx,idx,2);
+		code[*idx] = (unsigned char) i2*4 + 8;
+		(*idx)++;
+	}else if(v2=='v'){
+		//TODO - MOV LOCAL VAR TO EAX
+
+	}
+
+	//make operations with %edx and %eax
+	if(op=='+'){
+		unsigned char makeop[] = {0x01, 0xd0};
+		concat(code,makeop,idx,2);
+	}else if(op=='-'){
+		unsigned char makeop[] = {0x29, 0xd0};
+		concat(code,makeop,idx,2);
+	}else if(op=='*'){
+		unsigned char makeop[] = {0x0f, 0xaf, 0xc2};
+		concat(code,makeop,idx,3);
+	}
+}
+
+
+void cmd_atr(char v0, int i0, unsigned char *code, int * idx){
+	if(v0=='p'){
+		unsigned char moveax[] = {0x89, 0x45};
+		concat(code,moveax,idx,2);
+		code[*idx] = (unsigned char) i0*4 + 8; //to ?(ebp)
+		(*idx)++;
+	}else if(v0=='v'){
+		//TODO MOV EAX TO LOCAL VAR
 	}
 }
 
@@ -188,7 +229,13 @@ void cmd_func(unsigned char ** func, int * funcIdx, unsigned char * code, int * 
 	unsigned char begin[] = {0x55, 0x89, 0xe5};
 	(*funcIdx)++;
 	func[*funcIdx] = &code[*idx];
+	#if (DEBUG == 2)
+		printf(">>>>Antes de begin %p:	<<<<<\n",&code[*idx]);
+	#endif
 	concat(code,begin,idx,3);
+	#if (DEBUG == 2)
+		printf(">>>>Depois de begin %p:	<<<<<\n",&code[*idx]);
+	#endif
 }
 
 void cmd_end(unsigned char * code, int * idx){
@@ -196,3 +243,29 @@ void cmd_end(unsigned char * code, int * idx){
 	concat(code,end,idx,4);
 }
 
+void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code, int * idx){
+	unsigned char add4esp[] = {0x83, 0xc4, 0x04};
+
+	if(v1=='$'){
+		code[*idx] = 0x68; // push
+		(*idx)++;
+		*( (int *) &code[*idx] ) = i1; 
+		(*idx) += 4;
+	} else if(v1=='p'){
+		unsigned char pushl[] = {0xff, 0x75};
+		concat(code,pushl,idx,2);
+		code[*idx] = (unsigned char) i1*4 + 8;
+		(*idx)++;
+	} else if(v1=='v'){
+		//TODO local var
+	}
+
+	code[*idx] = 0xe8; // call
+	(*idx)++;
+	*( (int *) &code[*idx] ) = func[fc] - &code[(*idx)+4];
+	#if (DEBUG==2)
+		printf(">>>Deslocamento do call(f%d %p - prox linha %p): %p\n",fc, func[fc], &code[(*idx)+4], (void *)(func[fc] - &code[(*idx)+4]));
+	#endif
+	(*idx) += 4;
+	concat(code,add4esp,idx,3);
+}
