@@ -48,14 +48,9 @@ void gera(FILE *f, void **code, funcp *entry){
 		        break;
             }
 		    case 'e': {  /* end */
-            	char c0;
-		        if (fscanf(f, "nd%c", &c0) != 1) 
-		        	error("comando invalido", line);
-		        #if (DEBUG)
-					printf("%d - %p:		",idx, &codigo[idx]);
-				#endif
+		        fscanf(f, "nd");
 		        printf("end\n");
-		        cmd_end(codigo,&idx);
+		        //cmd_end(codigo,&idx);
 		        break;
 		    }
 		    case 'v': 
@@ -161,18 +156,57 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 		}
 		//TODO quando o primeiro paramentro do ret não é constante , case v, case p
 		case 'p': {
+			#if (DEBUG == 2)
+				printf(">>>>%d Antes do ret P %p:	<<<<<\n", *idx, &code[*idx]);
+			#endif
 			int aux;
-			unsigned char compara[]={0x83,0x73,(unsigned char) i0*4+8,0x0,0x0f,0x85};//cmp + jne
+			unsigned char compara[]={0x83,0x7d,(unsigned char) i0*4 + 8,0x00,0x0f,0x85};
+			//unsigned char end[] = {0x89, 0xec, 0x5d, 0xc3}; // pop mov e ret
 			if(i1 >= PRM_MAX)
 				error("numero maximo de parametros excedido. ", line);
 			concat(code,compara,idx,6);
-			aux = (int)	&code[*idx-1] +3
-			code[*idx]=(unsigned char*)&aux ;//endereço da próxima instrução após o jne
 
+			aux = (int)&code[*idx+8];
+
+			#if (DEBUG == 2)
+				printf(">>>>%d, endereco atual: %p, endereco de aux:  %p	<<<<<\n", *idx, &code[*idx], (unsigned char *)aux);
+			#endif
+
+			*( (int *) &code[*idx] ) =  aux ;//endereço da próxima instrução após o jne
+			(*idx) += 4;
+			//concat(code,end,idx,4);
+
+			#if (DEBUG == 2)
+				printf(">>>>%d Depois  do ret P %p<<<<<\n", *idx, &code[*idx]);
+			#endif
 		}
 		case 'v': {
+			#if (DEBUG == 2)
+				printf(">>>>%d Antes do ret P %p:	<<<<<\n", *idx, &code[*idx]);
+			#endif
+			int aux;
+			unsigned char compara[]={0x83,0x7d,(unsigned char) i0*-4 -4,0x00,0x0f,0x85};
+			//unsigned char end[] = {0x89, 0xec, 0x5d, 0xc3}; // pop mov e ret
+			if(i1 >= PRM_MAX)
+				error("numero maximo de parametros excedido. ", line);
+			concat(code,compara,idx,6);
+
+			aux = (int)&code[*idx+8];
+
+			#if (DEBUG == 2)
+				printf(">>>>%d, endereco atual: %p, endereco de aux:  %p	<<<<<\n", *idx, &code[*idx], (unsigned char *)aux);
+			#endif
+
+			*( (int *) &code[*idx] ) =  aux ;//endereço da próxima instrução após o jne
+			(*idx) += 4;
+			//concat(code,end,idx,4);
+
+			#if (DEBUG == 2)
+				printf(">>>>%d Depois  do ret P %p<<<<<\n", *idx, &code[*idx]);
+			#endif
 		}
 	}
+	cmd_end(code,idx);
 }
 
 void concat (unsigned char * code1, unsigned char * code2, int * idx, int n){
