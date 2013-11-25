@@ -1,9 +1,13 @@
+/** Victor Yves		  	1212469 */
+/** Etiene Dalcol   	1211996 */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "gerador.h"
 
 #define TAM_COD 2000
 #define PRM_MAX 10
+#define VAR_MAX 10		//não precisa conferir qtd de parametros, variaveis e talz, o arquivo de entrada esta sempre certo
 #define MAX_FUNCS 33
 #define DEBUG 0
 
@@ -84,7 +88,7 @@ void gera(FILE *f, void **code, funcp *entry){
 					printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
 					cmd_op(v1,i1,op,v2,i2,codigo,&idx);
 		        }
-		         #if (DEBUG==2)
+		        #if (DEBUG==2)
 					printf(">>>Atribuindo\n");
 				#endif
 		        cmd_atr(v0,i0,codigo,&idx);
@@ -109,7 +113,6 @@ void gera(FILE *f, void **code, funcp *entry){
   		line++;	
   		fscanf(f, " ");
 	}
-
 
 	(*entry) = (funcp) func[funcIdx];
 }
@@ -144,18 +147,33 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 					}
 					case 'v':{ // var
 						//TODO local var
+						unsigned char mov_eax[] = {0x8b, 0x45};					
+						if(i1 >= VAR_MAX)
+							error("numero maximo de variaveis excedido. ", line);						
+						concat(code,mov_eax,idx,2);
+						code[*idx] = (unsigned char) i1*-4 - 4;
+						(*idx)++;
 						break;
 					}
 				}
 			}
 			break;
 		}
-		//TODO quando o priemiro paramentro do ret não é constante , case v, case p
+		//TODO quando o primeiro paramentro do ret não é constante , case v, case p
+		case 'p': {
+			int aux;
+			unsigned char compara[]={0x83,0x73,(unsigned char) i0*4+8,0x0,0x0f,0x85};//cmp + jne
+			if(i1 >= PRM_MAX)
+				error("numero maximo de parametros excedido. ", line);
+			concat(code,compara,idx,6);
+			aux = (int)	&code[*idx-1] +3
+			code[*idx]=(unsigned char*)&aux ;//endereço da próxima instrução após o jne
+
+		}
+		case 'v': {
+		}
 	}
-	
 }
-
-
 
 void concat (unsigned char * code1, unsigned char * code2, int * idx, int n){
 	int i;
@@ -168,36 +186,43 @@ void concat (unsigned char * code1, unsigned char * code2, int * idx, int n){
 void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx){
 	
 	if(v1=='$'){
-		//mov $i1, %edx
+		//mov $i1, %eax
 		code[*idx] = 0xb8;
 		(*idx)++;
 		*( (int *) &code[*idx] ) = i1;  
 		(*idx) += 4;
 	}else if(v1=='p'){
-		//mov 8+4*i1(%ebp),%edx
-		unsigned char mov_edx[] = {0x8b, 0x45};
-		concat(code,mov_edx,idx,2);
+		//mov 8+4*i1(%ebp),%eax
+		unsigned char mov_eax[] = {0x8b, 0x45};
+		concat(code,mov_eax,idx,2);
 		code[*idx] = (unsigned char) i1*4 + 8;
 		(*idx)++;
 	}else if(v1=='v'){
-		//TODO - MOV LOCAL VAR TO EDX
+		//TODO - mov -4+(-4)*i1(%ebp),%eax
+		unsigned char mov_eax[] = {0x8b, 0x45};
+		concat(code,mov_eax,idx,2);
+		code[*idx] = (unsigned char) i1*-4 - 4;
+		(*idx)++;
 	}
 
 	if(v2=='$'){
-		//mov $i1, %eax
+		//mov $i2, %edx
 		code[*idx] = 0xba;
 		(*idx)++;
 		*( (int *) &code[*idx] ) = i2;  
 		(*idx) += 4;
 	}else if(v2=='p'){
-		//mov 8+4*i1(%ebp),%eax
-		unsigned char mov_ecx[] = {0x8b, 0x55};
-		concat(code,mov_ecx,idx,2);
+		//mov 8+4*i2(%ebp),%edx
+		unsigned char mov_edx[] = {0x8b, 0x55};
+		concat(code,mov_edx,idx,2);
 		code[*idx] = (unsigned char) i2*4 + 8;
 		(*idx)++;
 	}else if(v2=='v'){
-		//TODO - MOV LOCAL VAR TO EAX
-
+		//TODO - -4+(-4)*i2(%ebp),%edx
+		unsigned char mov_edx[] = {0x8b, 0x55};
+		concat(code,mov_edx,idx,2);
+		code[*idx] = (unsigned char) i2*-4 -4;
+		(*idx)++;
 	}
 
 	//make operations with %edx and %eax
@@ -216,12 +241,17 @@ void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int
 
 void cmd_atr(char v0, int i0, unsigned char *code, int * idx){
 	if(v0=='p'){
-		unsigned char moveax[] = {0x89, 0x45};
-		concat(code,moveax,idx,2);
-		code[*idx] = (unsigned char) i0*4 + 8; //to ?(ebp)
+		//mov %eax, 8+4*i0(%ebp)
+		unsigned char mov_eax[] = {0x89, 0x45};
+		concat(code,mov_eax,idx,2);
+		code[*idx] = (unsigned char) i0*4 + 8;
 		(*idx)++;
 	}else if(v0=='v'){
-		//TODO MOV EAX TO LOCAL VAR
+		//TODO mov %eax, -4+(-4)*i0(%ebp)
+		unsigned char mov_eax[] = {0x89, 0x45};
+		concat(code,mov_eax,idx,2);
+		code[*idx] = (unsigned char) i0*-4 - 4;
+		(*idx)++;
 	}
 }
 
@@ -252,12 +282,17 @@ void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code
 		*( (int *) &code[*idx] ) = i1; 
 		(*idx) += 4;
 	} else if(v1=='p'){
+		//push i1*4 + 8(%ebp)
 		unsigned char pushl[] = {0xff, 0x75};
 		concat(code,pushl,idx,2);
 		code[*idx] = (unsigned char) i1*4 + 8;
 		(*idx)++;
 	} else if(v1=='v'){
-		//TODO local var
+		//TODO push i1*-4 - 4(%ebp)
+		unsigned char pushl[] = {0xff, 0x75};
+		concat(code,pushl,idx,2);
+		code[*idx] = (unsigned char) i1*-4 -4;
+		(*idx)++;
 	}
 
 	code[*idx] = 0xe8; // call

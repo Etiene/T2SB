@@ -14,7 +14,7 @@ int main(void)
 		exit(1);
 	}
 
-	gera(f,&code,&pFunc);
+	gera (f,&code,&pFunc);
 
 	printf("Resultado: %d\n",(*pFunc)(3,5,6));
 
