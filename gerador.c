@@ -143,50 +143,35 @@ void gera(FILE *f, void **code, funcp *entry){
 }
 
 void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, int line){
-    switch(v0){
-        case '$': {
-            if(!i0){
-                ret_v1(v1, i1, code, idx, line);
-            }
-            break;
+   if(v0 == '$') {
+        if(!i0){
+            ret_v1(v1, i1, code, idx, line);
         }
-        case 'p': {
-            int bytesJump;
-            unsigned char * enderecoJump;
-            unsigned char compara[]={0x83,0x7d,(unsigned char) i0*4 + 8,0x00,0x75};	/*cmpl $0,?(%ebp) / jne */
-            unsigned char end[] = {0x89, 0xec, 0x5d, 0xc3}; /* pop mov e ret*/
+    }
+    else{
+        int bytesJump;
+        unsigned char * enderecoJump;
+        int byteCmp;
+        unsigned char compara[]={0x83,0x7d,0x00,0x00,0x75};   /*cmpl $0, ? / jne */
+        unsigned char end[] = {0x89, 0xec, 0x5d, 0xc3}; /* pop mov e ret*/
 
-            if(i1 >= PRM_MAX)
-                error("numero maximo de parametros excedido. ", line);
-            concat(code,compara,idx,5);
+        if(v0 == 'p')
+            byteCmp = i0*4 + 8;
+        else if(v0 == 'v')
+            byteCmp = i0*-4 -4;
+        compara[2] = (unsigned char) byteCmp;
 
-            bytesJump = *idx;
-            enderecoJump = &code[*idx];
-            (*idx)++;	//um espaço onde será colocado posteriormente os bytes de jump
+        if(i1 >= PRM_MAX)
+            error("numero maximo de parametros excedido. ", line);
+        concat(code,compara,idx,5);
 
-            ret_v1(v1, i1, code, idx, line);                        
-            concat(code,end,idx,4);
-            *enderecoJump = *idx - bytesJump -1;
-            break;
-        }
-        case 'v': {
-            int bytesJump;
-            unsigned char * enderecoJump;
-            unsigned char compara[]={0x83,0x7d,(unsigned char) i0*-4 -4,0x00,0x75};	/*cmpl $0,-?(%ebp) / jne */
-            unsigned char end[] = {0x89, 0xec, 0x5d, 0xc3}; // pop mov e ret
-            if(i1 >= PRM_MAX)
-                    error("numero maximo de parametros excedido. ", line);
-            concat(code,compara,idx,5);
+        bytesJump = *idx;
+        enderecoJump = &code[*idx];
+        (*idx)++;   //um espaço onde será colocado posteriormente os bytes de jump
 
-            bytesJump = *idx;
-            enderecoJump = &code[*idx];
-            (*idx)++;	//um espaço onde será colocado posteriormente os bytes de jump
-
-            ret_v1(v1, i1, code, idx, line);        
-            concat(code,end,idx,4);
-            *enderecoJump = *idx - bytesJump - 1;
-            break;
-        }
+        ret_v1(v1, i1, code, idx, line);        
+        concat(code,end,idx,4);
+        *enderecoJump = *idx - bytesJump - 1;
     }
 }
 
