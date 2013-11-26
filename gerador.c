@@ -41,7 +41,7 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 	i2:		índice do segundo parâmetro/variável
 	op:		identifica a operação aritmética
 */
-void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int * declaredVars, int line);
+void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int declaredVars[MAX_FUNCS][MAX_VARS], int line, int funcIdx);
 
 /**cmd_fun: trata o caso de criação de uma função*/
 void cmd_func(unsigned char ** func, int * funcIdx, unsigned char * code, int * idx);
@@ -55,7 +55,7 @@ void cmd_end(unsigned char * code, int * idx);
 void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code, int * idx);
 
 /**cmd_atr: trata o caso de atribuição em SB*/
-void cmd_atr(char v0, int i0, unsigned char *code, int * idx, int * declaredVars);
+void cmd_atr(char v0, int i0, unsigned char *code, int * idx, int declaredVars[MAX_FUNCS][MAX_VARS], int funcIdx );
 
 /**ret_v1: função auxiliar de cmd_ret, insere o código de máquina em code*/
 void ret_v1(char v1, int i1, unsigned char * code, int * idx, int line);
@@ -67,17 +67,18 @@ static void error (const char *msg, int line) {
 
 
 void gera(FILE *f, void **code, funcp *entry){
-    int c, i;
+    int c, i,j;
     int line = 1, 
         idx = 0, 
         funcIdx = -1;
     unsigned char * func[MAX_FUNCS];
-    int declaredVars[MAX_VARS];
+    int declaredVars[MAX_FUNCS][MAX_VARS];
     unsigned char *codigo = (unsigned char *) malloc (TAM_COD);
     *code = codigo;
 
-    for(i=0;i<MAX_VARS;i++)
-            declaredVars[i]=0;
+    for(i=0;i<MAX_FUNCS;i++)
+         for(j=0;j<MAX_VARS;j++)
+            declaredVars[i][j]=0;
 
     while ((c = fgetc(f)) != EOF) {
     	switch (c){
@@ -117,9 +118,9 @@ void gera(FILE *f, void **code, funcp *entry){
                     if (fscanf(f, "%d %c %c%d", &i1, &op, &v2, &i2) != 4)
                         error("comando invalido", line);
                     printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
-                    cmd_op(v1,i1,op,v2,i2,codigo,&idx,declaredVars,line);
+                    cmd_op(v1,i1,op,v2,i2,codigo,&idx,declaredVars,line,funcIdx);
                 }
-                cmd_atr(v0,i0,codigo,&idx,declaredVars);
+                cmd_atr(v0,i0,codigo,&idx,declaredVars,funcIdx);
                 break;
             }
             case 'r': {  /* ret */
@@ -223,7 +224,7 @@ void concat (unsigned char * code1, unsigned char * code2, int * idx, int n){
     }
 }
 
-void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int * declaredVars, int line){
+void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int declaredVars[MAX_FUNCS][MAX_VARS], int line, int funcIdx){
         
     if(v1=='$'){ //mov $i1, %eax
         code[*idx] = 0xb8;
@@ -237,7 +238,7 @@ void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int
     }
     else if(v1=='v'){ // mov -4+(-4)*i1(%ebp),%eax                
         unsigned char mov_eax[] = {0x8b, 0x45, (unsigned char) i1*-4 - 4};
-        if(!declaredVars[i1])
+        if(!declaredVars[funcIdx][i1])
             error("Var nao declarada, usada pela primeira vez aqui", line);
         concat(code,mov_eax,idx,3);
     }
@@ -253,7 +254,7 @@ void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int
     }
     else if(v2=='v'){// -4+(-4)*i2(%ebp),%edx
         unsigned char mov_edx[] = {0x8b, 0x55,(unsigned char) i2*-4 -4};                
-        if(!declaredVars[i2])
+        if(!declaredVars[funcIdx][i2])
             error("Var nao declarada, usada pela primeira vez aqui", line);
         concat(code,mov_edx,idx,3);
     }
@@ -271,7 +272,7 @@ void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int
     }
 }
 
-void cmd_atr(char v0, int i0, unsigned char *code, int * idx, int * declaredVars){
+void cmd_atr(char v0, int i0, unsigned char *code, int * idx, int declaredVars[MAX_FUNCS][MAX_VARS], int funcIdx ){
     if(v0=='p'){ //mov %eax, 8+4*i0(%ebp)
         unsigned char mov_eax[] = {0x89, 0x45,(unsigned char) i0*4 + 8};
         concat(code,mov_eax,idx,3);
@@ -279,9 +280,9 @@ void cmd_atr(char v0, int i0, unsigned char *code, int * idx, int * declaredVars
     else if(v0=='v'){
         unsigned char sub_esp[] = {0x83, 0xec, (unsigned char) i0*4 + 4};
         unsigned char mov_eax[] = {0x89, 0x45, (unsigned char) i0*-4 - 4};
-        if(!declaredVars[i0]){ //se a var não foi declarada ainda, diminuir esp
+        if(!declaredVars[funcIdx][i0]){ //se a var não foi declarada ainda, diminuir esp
             concat(code,sub_esp,idx,3);
-            declaredVars[i0]=1;
+            declaredVars[funcIdx][i0]=1;
         }
         concat(code,mov_eax,idx,3);
     }
