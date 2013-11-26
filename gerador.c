@@ -9,15 +9,16 @@
 #define PRM_MAX 10
 #define VAR_MAX 10		//não precisa conferir qtd de parametros, variaveis e talz, o arquivo de entrada esta sempre certo
 #define MAX_FUNCS 33
+#define MAX_VARS 10
 #define DEBUG 1
 
 void concat (unsigned char * code1, unsigned char * code2, int * idx, int n);
 void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, int line);
-void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx);
+void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int * declaredVars, int line);
 void cmd_func(unsigned char ** func, int * funcIdx, unsigned char * code, int * idx);
 void cmd_end(unsigned char * code, int * idx);
 void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code, int * idx);
-void cmd_atr(char v0, int i0, unsigned char *code, int * idx);
+void cmd_atr(char v0, int i0, unsigned char *code, int * idx, int * declaredVars);
 void ret_v1(char v1, int i1, unsigned char * code, int * idx, int line);
 
 static void error (const char *msg, int line) {
@@ -27,13 +28,17 @@ static void error (const char *msg, int line) {
 
 
 void gera(FILE *f, void **code, funcp *entry){
-	int c;
+	int c, i;
 	int line = 1, 
 		idx = 0, 
 		funcIdx = -1;
 	unsigned char * func[MAX_FUNCS];
+	int declaredVars[MAX_VARS];
     unsigned char *codigo = (unsigned char *) malloc (TAM_COD);
     *code = codigo;
+
+    for(i=0;i<MAX_VARS;i++)
+    	declaredVars[i]=0;
 
 	while ((c = fgetc(f)) != EOF) {
 		switch (c) {
@@ -82,12 +87,9 @@ void gera(FILE *f, void **code, funcp *entry){
 						printf("%d - %p:	",idx, &codigo[idx]);
 					#endif
 					printf("%c%d = %c%d %c %c%d\n", v0, i0, v1, i1, op, v2, i2);
-					cmd_op(v1,i1,op,v2,i2,codigo,&idx);
+					cmd_op(v1,i1,op,v2,i2,codigo,&idx,declaredVars,line);
 		        }
-		        #if (DEBUG==2)
-					printf(">>>Atribuindo\n");
-				#endif
-		        cmd_atr(v0,i0,codigo,&idx);
+		        cmd_atr(v0,i0,codigo,&idx,declaredVars);
         		break;
 		    }
 		    case 'r': {  /* ret */
@@ -121,11 +123,7 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 			}
 			break;
 		}
-		//TODO quando o primeiro paramentro do ret não é constante , case v, case p
 		case 'p': {
-			#if (DEBUG == 2)
-				printf(">>>>%d Antes do ret P %p:	<<<<<\n", *idx, &code[*idx]);
-			#endif
 			int bytesJump;
 			unsigned char * enderecoJump;
 			unsigned char compara[]={0x83,0x7d,(unsigned char) i0*4 + 8,0x00,0x75};
@@ -137,26 +135,15 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 
 			bytesJump = *idx;
 			enderecoJump = &code[*idx];
-
-			#if (DEBUG == 2)
-				printf(">>>>%d Depois do ret P: %p<<<<\n", *idx, &code[*idx]);
-			#endif
-
 			//um espaço onde será colocado posteriormente os bytes de jump
 			(*idx)++;
 
 			ret_v1(v1, i1, code, idx, line);			
 			concat(code,end,idx,4);
 			*enderecoJump = *idx - bytesJump -1;
-			#if (DEBUG == 2)
-				printf(">>>>%d Depois  do ret P %p<<<<<\n", *idx, &code[*idx]);
-			#endif
 			break;
 		}
 		case 'v': {
-			#if (DEBUG == 2)
-				printf(">>>>%d Antes do ret V %p:	<<<<<\n", *idx, &code[*idx]);
-			#endif
 			int bytesJump;
 			unsigned char * enderecoJump;
 			unsigned char compara[]={0x83,0x7d,(unsigned char) i0*-4 -4,0x00,0x75};
@@ -173,10 +160,6 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 			ret_v1(v1, i1, code, idx, line);	
 			concat(code,end,idx,4);
 			*enderecoJump = *idx - bytesJump - 1;
-
-			#if (DEBUG == 2)
-				printf(">>>>%d Depois  do ret V %p<<<<<\n", *idx, &code[*idx]);
-			#endif
 			break;
 		}
 	}
@@ -192,22 +175,17 @@ void ret_v1(char v1, int i1, unsigned char * code, int * idx, int line){
 			break;						
 		}
 		case 'p':{ //parameter
-			unsigned char mov_eax[] = {0x8b, 0x45};					
+			unsigned char mov_eax[] = {0x8b, 0x45,(unsigned char) i1*4 + 8};					
 			if(i1 >= PRM_MAX)
 				error("numero maximo de parametros excedido. ", line);						
-			concat(code,mov_eax,idx,2);
-			code[*idx] = (unsigned char) i1*4 + 8;
-			(*idx)++;
+			concat(code,mov_eax,idx,3);
 			break;
 		}
 		case 'v':{ // var
-			//TODO local var
-			unsigned char mov_eax[] = {0x8b, 0x45};					
+			unsigned char mov_eax[] = {0x8b, 0x45,(unsigned char) i1*-4 - 4};					
 			if(i1 >= VAR_MAX)
 				error("numero maximo de variaveis excedido. ", line);						
-			concat(code,mov_eax,idx,2);
-			code[*idx] = (unsigned char) i1*-4 - 4;
-			(*idx)++;
+			concat(code,mov_eax,idx,3);
 			break;
 		}
 	}
@@ -221,46 +199,39 @@ void concat (unsigned char * code1, unsigned char * code2, int * idx, int n){
 	}
 }
 
-void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx){
+void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int * idx, int * declaredVars, int line){
 	
-	if(v1=='$'){
-		//mov $i1, %eax
+	if(v1=='$'){ //mov $i1, %eax
 		code[*idx] = 0xb8;
 		(*idx)++;
 		*( (int *) &code[*idx] ) = i1;  
 		(*idx) += 4;
-	}else if(v1=='p'){
-		//mov 8+4*i1(%ebp),%eax
-		unsigned char mov_eax[] = {0x8b, 0x45};
-		concat(code,mov_eax,idx,2);
-		code[*idx] = (unsigned char) i1*4 + 8;
-		(*idx)++;
-	}else if(v1=='v'){
-		//TODO - mov -4+(-4)*i1(%ebp),%eax
-		unsigned char mov_eax[] = {0x8b, 0x45};
-		concat(code,mov_eax,idx,2);
-		code[*idx] = (unsigned char) i1*-4 - 4;
-		(*idx)++;
+	}
+	else if(v1=='p'){ //mov 8+4*i1(%ebp),%eax
+		unsigned char mov_eax[] = {0x8b, 0x45,(unsigned char) i1*4 + 8};
+		concat(code,mov_eax,idx,3);
+	}
+	else if(v1=='v'){ // mov -4+(-4)*i1(%ebp),%eax		
+		unsigned char mov_eax[] = {0x8b, 0x45, (unsigned char) i1*-4 - 4};
+		if(!declaredVars[i1])
+			error("Var nao declarada, usada pela primeira vez aqui", line);
+		concat(code,mov_eax,idx,3);
 	}
 
-	if(v2=='$'){
-		//mov $i2, %edx
+	if(v2=='$'){ //mov $i2, %edx
 		code[*idx] = 0xba;
 		(*idx)++;
 		*( (int *) &code[*idx] ) = i2;  
 		(*idx) += 4;
-	}else if(v2=='p'){
-		//mov 8+4*i2(%ebp),%edx
-		unsigned char mov_edx[] = {0x8b, 0x55};
-		concat(code,mov_edx,idx,2);
-		code[*idx] = (unsigned char) i2*4 + 8;
-		(*idx)++;
-	}else if(v2=='v'){
-		//TODO - -4+(-4)*i2(%ebp),%edx
-		unsigned char mov_edx[] = {0x8b, 0x55};
-		concat(code,mov_edx,idx,2);
-		code[*idx] = (unsigned char) i2*-4 -4;
-		(*idx)++;
+	}else if(v2=='p'){ //mov 8+4*i2(%ebp),%edx
+		unsigned char mov_edx[] = {0x8b, 0x55,(unsigned char) i2*4 + 8};
+		concat(code,mov_edx,idx,3);
+	}
+	else if(v2=='v'){// -4+(-4)*i2(%ebp),%edx
+		unsigned char mov_edx[] = {0x8b, 0x55,(unsigned char) i2*-4 -4};		
+		if(!declaredVars[i2])
+			error("Var nao declarada, usada pela primeira vez aqui", line);
+		concat(code,mov_edx,idx,3);
 	}
 
 	//make operations with %edx and %eax
@@ -277,19 +248,19 @@ void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int
 }
 
 
-void cmd_atr(char v0, int i0, unsigned char *code, int * idx){
-	if(v0=='p'){
-		//mov %eax, 8+4*i0(%ebp)
-		unsigned char mov_eax[] = {0x89, 0x45};
-		concat(code,mov_eax,idx,2);
-		code[*idx] = (unsigned char) i0*4 + 8;
-		(*idx)++;
-	}else if(v0=='v'){
-		//TODO mov %eax, -4+(-4)*i0(%ebp)
-		unsigned char mov_eax[] = {0x89, 0x45};
-		concat(code,mov_eax,idx,2);
-		code[*idx] = (unsigned char) i0*-4 - 4;
-		(*idx)++;
+void cmd_atr(char v0, int i0, unsigned char *code, int * idx, int * declaredVars){
+	if(v0=='p'){ //mov %eax, 8+4*i0(%ebp)
+		unsigned char mov_eax[] = {0x89, 0x45,(unsigned char) i0*4 + 8};
+		concat(code,mov_eax,idx,3);
+	}
+	else if(v0=='v'){
+		unsigned char sub_esp[] = {0x83, 0xec, (unsigned char) i0*4 + 4};
+		unsigned char mov_eax[] = {0x89, 0x45, (unsigned char) i0*-4 - 4};
+		if(!declaredVars[i0]){ //se a var não foi declarada ainda, diminuir esp
+			concat(code,sub_esp,idx,3);
+			declaredVars[i0]=1;
+		}
+		concat(code,mov_eax,idx,3);
 	}
 }
 
@@ -297,13 +268,7 @@ void cmd_func(unsigned char ** func, int * funcIdx, unsigned char * code, int * 
 	unsigned char begin[] = {0x55, 0x89, 0xe5};
 	(*funcIdx)++;
 	func[*funcIdx] = &code[*idx];
-	#if (DEBUG == 2)
-		printf(">>>>Antes de begin %p:	<<<<<\n",&code[*idx]);
-	#endif
 	concat(code,begin,idx,3);
-	#if (DEBUG == 2)
-		printf(">>>>Depois de begin %p:	<<<<<\n",&code[*idx]);
-	#endif
 }
 
 void cmd_end(unsigned char * code, int * idx){
@@ -312,8 +277,6 @@ void cmd_end(unsigned char * code, int * idx){
 }
 
 void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code, int * idx){
-	unsigned char add4esp[] = {0x83, 0xc4, 0x04};
-
 	if(v1=='$'){
 		code[*idx] = 0x68; // push
 		(*idx)++;
@@ -321,24 +284,20 @@ void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code
 		(*idx) += 4;
 	} else if(v1=='p'){
 		//push i1*4 + 8(%ebp)
-		unsigned char pushl[] = {0xff, 0x75};
-		concat(code,pushl,idx,2);
-		code[*idx] = (unsigned char) i1*4 + 8;
-		(*idx)++;
-	} else if(v1=='v'){
+		unsigned char pushl[] = {0xff, 0x75,(unsigned char) i1*4 + 8};
+		concat(code,pushl,idx,3);
+	}else if(v1=='v'){
 		//TODO push i1*-4 - 4(%ebp)
-		unsigned char pushl[] = {0xff, 0x75};
-		concat(code,pushl,idx,2);
-		code[*idx] = (unsigned char) i1*-4 -4;
-		(*idx)++;
+		unsigned char pushl[] = {0xff, 0x75,(unsigned char) i1*-4 -4};
+		concat(code,pushl,idx,3);
 	}
 
 	code[*idx] = 0xe8; // call
 	(*idx)++;
 	*( (int *) &code[*idx] ) = func[fc] - &code[(*idx)+4];
-	#if (DEBUG==2)
-		printf(">>>Deslocamento do call(f%d %p - prox linha %p): %p\n",fc, func[fc], &code[(*idx)+4], (void *)(func[fc] - &code[(*idx)+4]));
-	#endif
 	(*idx) += 4;
-	concat(code,add4esp,idx,3);
+}
+
+void libera (void* p){
+	free(p);
 }

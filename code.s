@@ -13,7 +13,12 @@ f0:
 	mov 8(%ebp), %eax
 	mov 12(%ebp), %eax
 	mov -4(%ebp), %eax
+	mov -8(%ebp), %eax
 	mov -4(%ebp), %edx
+	mov -4(%ebp), %ecx
+	mov -8(%ebp), %ecx
+	sub $4,%esp
+	sub $8,%esp
 	mov $5, %eax
 	mov $15, %eax
 	mov $5, %ecx
