@@ -151,15 +151,13 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
     else{
         int bytesJump;
         unsigned char * enderecoJump;
-        int byteCmp;
-        unsigned char compara[]={0x83,0x7d,0x00,0x00,0x75};   /*cmpl $0, ? / jne */
+        unsigned char compara[]={0x83,0x7d,'?',0x00,0x75};   /*cmpl $0, ? / jne */
         unsigned char end[] = {0x89, 0xec, 0x5d, 0xc3}; /* pop mov e ret*/
 
         if(v0 == 'p')
-            byteCmp = i0*4 + 8;
+            compara[2] = (unsigned char) i0*4 + 8;
         else if(v0 == 'v')
-            byteCmp = i0*-4 -4;
-        compara[2] = (unsigned char) byteCmp;
+            compara[2] = (unsigned char) i0*-4 -4;
 
         if(i1 >= PRM_MAX)
             error("numero maximo de parametros excedido. ", line);
@@ -176,28 +174,22 @@ void cmd_ret(char v0, int i0, char v1, int i1, unsigned char * code, int * idx, 
 }
 
 void ret_v1(char v1, int i1, unsigned char * code, int * idx, int line){
-	switch(v1){
-        case '$':{	//const
-	        code[*idx] = 0xb8;
-	        (*idx)++;
-	        *( (int *) &code[*idx] ) = i1;  
-	        (*idx) += 4;
-	        break;                                                
-        }
-        case 'p':{ //parameter
-            unsigned char mov_eax[] = {0x8b, 0x45,(unsigned char) i1*4 + 8};                                        
-            if(i1 >= PRM_MAX)
-                    error("numero maximo de parametros excedido. ", line);                                                
-            concat(code,mov_eax,idx,3);
-            break;
-        }
-        case 'v':{ //var
-            unsigned char mov_eax[] = {0x8b, 0x45,(unsigned char) i1*-4 - 4};                                        
-            if(i1 >= VAR_MAX)
-                    error("numero maximo de variaveis excedido. ", line);                                                
-            concat(code,mov_eax,idx,3);
-            break;
-        }
+	if(v1 == '$'){	//const
+        code[*idx] = 0xb8;
+        (*idx)++;
+        *( (int *) &code[*idx] ) = i1;  
+        (*idx) += 4;                                               
+    }
+    else{
+        unsigned char mov_eax[] = {0x8b, 0x45,'?'};
+        if(v1 == 'p')
+            mov_eax[2] = (unsigned char) i1*4 + 8;
+        else if(v1 == 'v')
+            mov_eax[2] = (unsigned char) i1*-4 - 4;
+                                            
+        if(i1 >= PRM_MAX)
+            error("numero maximo de parametros excedido. ", line);                                                
+        concat(code,mov_eax,idx,3);
 	}
 }
 
@@ -296,7 +288,7 @@ void cmd_call(int fc, char v1, int i1,unsigned char ** func, unsigned char *code
         unsigned char pushl[] = {0xff, 0x75,(unsigned char) i1*4 + 8};
         concat(code,pushl,idx,3);
     }else if(v1=='v'){
-        //TODO push i1*-4 - 4(%ebp)
+        // push i1*-4 - 4(%ebp)
         unsigned char pushl[] = {0xff, 0x75,(unsigned char) i1*-4 -4};
         concat(code,pushl,idx,3);
     }
