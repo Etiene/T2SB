@@ -276,7 +276,6 @@ void cmd_op(char v1, int i1, char op, char v2, int i2, unsigned char * code, int
 	}
 }
 
-
 void cmd_atr(char v0, int i0, unsigned char *code, int * idx){
 	if(v0=='p'){
 		//mov %eax, 8+4*i0(%ebp)
