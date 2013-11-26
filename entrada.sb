@@ -1,11 +1,16 @@
 function
-p0 = p0 * p0
-ret? $0 p0
+p0 = p0 + $1
+v0 = $5 + $5
+v1 = v0 + p0
+v2 = v1 + $1
+ret? $0 v2
 end
 function
-ret? p0 $0
 v0 = call 0 p0
-p0 = p0 - $1
-v1 = call 1 p0
+v1 = v0 + p0
 ret? $0 v1
+end
+function
+v0 = call 1 p0
+ret? $0 v0
 end

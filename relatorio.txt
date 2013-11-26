@@ -1,0 +1,43 @@
+/** Victor Yves			1212469 */
+/** Etiene Dalcol		1211996 */
+
+Os testes foram realizados com as funções apresentadas como exemplo na página
+de descrição do trabalho, passando diversos parâmetros diferentes pela da main:
+
+->Função que retorna uma constante:
+
+function
+ret? $0 $1
+end
+
+->Função que retorna o parâmetro + 1
+
+function
+p0 = p0 + $1
+ret? $0 p0
+end
+
+->Função que calcula o fatorial de seu parâmetro:
+
+function
+ret? p0 $1
+v0 = p0 - $1
+v1 = call 0 v0
+v0 = p0 * v1
+ret? $0 v0
+end
+
+->Função que calcula a soma dos quadrados de 1 até o seu parâmetro:
+
+function
+p0 = p0 * p0
+ret? $0 p0
+end
+function
+ret? p0 $0
+v0 = call 0 p0
+p0 = p0 - $1
+v1 = call 1 p0
+v0 = v0 + v1
+ret? $0 v0
+end
