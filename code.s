@@ -9,7 +9,7 @@ f0:
   	 1:	89 e5                	mov    %esp,%ebp
 */
 	cmp $0,8(%ebp)
-	jne 9
+	jne L1
 	mov 8(%ebp), %eax
 	mov 12(%ebp), %eax
 	mov -4(%ebp), %eax
@@ -18,6 +18,7 @@ f0:
 	mov $15, %eax
 	mov $5, %ecx
 	mov $5, %edx
+L1:
 	add $4, 8(%ebp)
 	add $64, 8(%ebp)
 	add $5, %edx
