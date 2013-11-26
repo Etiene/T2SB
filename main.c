@@ -18,5 +18,7 @@ int main(void)
 
 	printf("Resultado: %d\n",(*pFunc)(10));
 
+	libera(code);
+
 	return 0;
 }
